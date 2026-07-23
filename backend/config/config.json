@@ -1,0 +1,10 @@
+{
+  "trimDuration": 20,
+  "renderProfile": "shorts_hd",
+  "archiveMode": true,
+  "uploadDelay": 0,
+  "retryCount": 3,
+  "watermarkEnabled": false,
+  "titlePrefix": "Mini Vlog",
+  "titlePadding": 6
+}
