@@ -1,3 +1,0 @@
-file 'D:/Projects/AutoVideoPublisher/storage/original_videos/original_videos1.mp4'
-
-file 'D:/Projects/AutoVideoPublisher/storage/result_clips/result_clips1.mp4'
