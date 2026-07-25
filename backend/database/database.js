@@ -1,9 +1,21 @@
-const sqlite3 = require("sqlite3").verbose();
+const Database = require("better-sqlite3");
 const path = require("path");
 
 const dbPath = path.join(__dirname, "app.db");
 
 console.log("Database Path:", dbPath);
+
+const db = new Database(dbPath);
+
+db.pragma("journal_mode = WAL");
+db.pragma("synchronous = NORMAL");
+db.pragma("foreign_keys = ON");
+db.pragma("temp_store = MEMORY");
+db.pragma("cache_size = -10000");
+db.pragma("busy_timeout = 10000");
+
+console.log("✅ SQLite Connected");
+console.log("✅ SQLite Optimizations Enabled");
 
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
