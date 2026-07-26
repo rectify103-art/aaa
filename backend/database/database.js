@@ -17,98 +17,66 @@ db.pragma("busy_timeout = 10000");
 console.log("✅ SQLite Connected");
 console.log("✅ SQLite Optimizations Enabled");
 
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error("❌ Database Error:", err.message);
-    } else {
-        console.log("✅ SQLite Connected");
-
-        
-        db.serialize(() => {
-
-        db.run("PRAGMA journal_mode = WAL;");
-        db.run("PRAGMA synchronous = NORMAL;");
-        db.run("PRAGMA foreign_keys = ON;");
-        db.run("PRAGMA temp_store = MEMORY;");
-        db.run("PRAGMA cache_size = -10000;");
-        db.run("PRAGMA busy_timeout = 10000;");
-
-        console.log("✅ SQLite Optimizations Enabled");
-
-    });
-    }
-
-});
-
-const originalRun = db.run.bind(db);
-
 const DEBUG_SQL = false;
 
-db.run = function (sql, ...args) {
-
-   if (
-        DEBUG_SQL &&
-        (
-            sql.includes("original_videos") ||
-            sql.includes("result_clips")
-        )
-    ) {
-
-        console.log("\n================ SQL RUN ================");
+function run(sql, params = []) {
+    if (DEBUG_SQL) {
         console.log(sql);
-        console.trace();
-        console.log("=========================================\n");
-
     }
+    return db.prepare(sql).run(params);
+}
 
-    return originalRun(sql, ...args);
-};
+function get(sql, params = []) {
+    return db.prepare(sql).get(params);
+}
 
+function all(sql, params = []) {
+    return db.prepare(sql).all(params);
+}
 
-db.serialize(()=>{
-    console.log("Database module loaded");
+function createIndex(name, sql) {
+    db.prepare(sql).run();
+    console.log(`✅ ${name}`);
+}
 
+function addColumnIfNotExists(table, column, definition) {
+    const rows = db.prepare(`PRAGMA table_info(${table})`).all();
 
-// Original Videos
+    const exists = rows.some(r => r.name === column);
 
-db.run(`
+    if (!exists) {
+        db.prepare(
+            `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`
+        ).run();
+
+        console.log(`✓ ${table}.${column} added`);
+    }
+}
+
+console.log("Database module loaded");
+
+run(`
 CREATE TABLE IF NOT EXISTS original_videos(
-
 id TEXT PRIMARY KEY,
 file_name TEXT,
 file_path TEXT,
 status TEXT DEFAULT 'pending',
 used INTEGER DEFAULT 0,
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
-)
-`);
-
-
-
-// Result Clips
-
-db.run(`
+run(`
 CREATE TABLE IF NOT EXISTS result_clips(
-
 id TEXT PRIMARY KEY,
 file_name TEXT,
 file_path TEXT,
 status TEXT DEFAULT 'available',
 used INTEGER DEFAULT 0,
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
-)
-`);
-
-
-
-
-// Music Packages
-
-db.run(`
+run(`
 CREATE TABLE IF NOT EXISTS music_packages(
-
 id TEXT PRIMARY KEY,
 music_file TEXT,
 description TEXT,
@@ -116,18 +84,10 @@ hashtags TEXT,
 license TEXT,
 active INTEGER DEFAULT 1,
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
-)
-`);
-
-
-
-
-// Generated Videos
-
-db.run(`
+run(`
 CREATE TABLE IF NOT EXISTS generated_videos(
-
 id TEXT PRIMARY KEY,
 original_video_id TEXT,
 result_clip_id TEXT,
@@ -137,59 +97,22 @@ description TEXT,
 output_file TEXT,
 status TEXT,
 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
-)
-`);
-
-
-
-
-// Upload History
-
-db.run(`
+run(`
 CREATE TABLE IF NOT EXISTS upload_history(
-
 id TEXT PRIMARY KEY,
 video_id TEXT,
 platform TEXT,
 status TEXT,
 uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
 
-)
-`);
-
-
-// music_packages migration
-
-addColumnIfNotExists(
-    "music_packages",
-    "package_name",
-    "TEXT"
-);
-
-addColumnIfNotExists(
-    "music_packages",
-    "used_count",
-    "INTEGER DEFAULT 0"
-);
-
-addColumnIfNotExists(
-    "music_packages",
-    "last_used",
-    "DATETIME"
-);
-
-addColumnIfNotExists(
-    "music_packages",
-    "platforms",
-    "TEXT"
-);
-
-addColumnIfNotExists(
-    "music_packages",
-    "metadata_file",
-    "TEXT"
-);
+addColumnIfNotExists("music_packages","package_name","TEXT");
+addColumnIfNotExists("music_packages","used_count","INTEGER DEFAULT 0");
+addColumnIfNotExists("music_packages","last_used","DATETIME");
+addColumnIfNotExists("music_packages","platforms","TEXT");
+addColumnIfNotExists("music_packages","metadata_file","TEXT");
 
 addColumnIfNotExists("generated_videos","package_name","TEXT");
 addColumnIfNotExists("generated_videos","tags","TEXT");
@@ -200,9 +123,6 @@ addColumnIfNotExists("generated_videos","youtube_video_id","TEXT");
 addColumnIfNotExists("generated_videos","youtube_url","TEXT");
 addColumnIfNotExists("generated_videos","upload_time","DATETIME");
 addColumnIfNotExists("generated_videos","upload_error","TEXT");
-
-
-
 
 createIndex(
     "idx_original_status_used",
@@ -252,60 +172,12 @@ createIndex(
     ON generated_videos(status, created_at)`
 );
 
-
 console.log("✅ Database Indexes Ready");
-
-
 console.log("✅ Database Initialized");
 
-});
-
-
-module.exports = db;
-
-
-function createIndex(name, sql) {
-
-    db.run(sql, (err) => {
-
-        if (err) {
-            console.error(`❌ ${name}: ${err.message}`);
-        } else {
-            console.log(`✅ ${name}`);
-        }
-
-    });
-
-}
-
-function addColumnIfNotExists(table, column, definition) {
-
-    db.all(`PRAGMA table_info(${table})`, [], (err, rows) => {
-
-        if (err) {
-            console.error(err);
-            return;
-        }
-
-        const exists = rows.some(r => r.name === column);
-
-        if (!exists) {
-
-            db.run(
-                `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
-                (err) => {
-
-                    if (err) {
-                        console.error(err.message);
-                    } else {
-                        console.log(`✓ ${table}.${column} added`);
-                    }
-
-                }
-            );
-
-        }
-
-    });
-
-}
+module.exports = {
+    db,
+    run,
+    get,
+    all
+};

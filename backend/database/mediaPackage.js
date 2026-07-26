@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const db = require("../database/database");
+const { run, get, all } = require("../database/database");
 
 const STORAGE_PATH = path.join(
     __dirname,
@@ -11,132 +11,78 @@ const STORAGE_PATH = path.join(
 /**
  * Get all active packages
  */
-function listPackages() {
-    return new Promise((resolve, reject) => {
+async function listPackages() {
 
-        db.all(
-            `
-            SELECT *
-            FROM music_packages
-            WHERE active = 1
-            ORDER BY created_at ASC
-            `,
-            [],
-            (err, rows) => {
+    return all(
+        `
+        SELECT *
+        FROM music_packages
+        WHERE active = 1
+        ORDER BY created_at ASC
+        `
+    );
 
-                if (err) {
-                    return reject(err);
-                }
-
-                resolve(rows);
-
-            }
-        );
-
-    });
 }
-
 
 /**
  * Get package by id
  */
-function getPackage(id) {
+async function getPackage(id) {
 
-    return new Promise((resolve, reject) => {
-
-        db.get(
-            `
-            SELECT *
-            FROM music_packages
-            WHERE id = ?
-            `,
-            [id],
-            (err, row) => {
-
-                if (err) {
-                    return reject(err);
-                }
-
-                resolve(row);
-
-            }
-        );
-
-    });
+    return get(
+        `
+        SELECT *
+        FROM music_packages
+        WHERE id = ?
+        `,
+        [id]
+    );
 
 }
-
 
 /**
  * Get next package (Round Robin)
  */
-function getNextPackage() {
+async function getNextPackage() {
 
-    return new Promise((resolve, reject) => {
+    const row = get(
+        `
+        SELECT *
+        FROM music_packages
+        WHERE active = 1
+        ORDER BY used_count ASC,
+                 created_at ASC
+        LIMIT 1
+        `
+    );
 
-        db.get(
-            `
-            SELECT *
-            FROM music_packages
-            WHERE active = 1
-            ORDER BY used_count ASC,
-                     created_at ASC
-            LIMIT 1
-            `,
-            [],
-            (err, row) => {
+    if (!row) {
+        throw new Error("No active media package found.");
+    }
 
-                if (err) {
-                    return reject(err);
-                }
-
-                if (!row) {
-                    return reject(
-                        new Error("No active media package found.")
-                    );
-                }
-
-                resolve(row);
-
-            }
-        );
-
-    });
+    return row;
 
 }
-
 
 /**
  * Increase package usage
  */
-function markPackageUsed(id) {
+async function markPackageUsed(id) {
 
-    return new Promise((resolve, reject) => {
+    run(
+        `
+        UPDATE music_packages
+        SET
+            used_count = used_count + 1,
+            last_used = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+        [id]
+    );
 
-        db.run(
-            `
-            UPDATE music_packages
-            SET
-                used_count = used_count + 1,
-                last_used = CURRENT_TIMESTAMP
-            WHERE id = ?
-            `,
-            [id],
-            function (err) {
-
-                if (err) {
-                    return reject(err);
-                }
-
-                resolve(true);
-
-            }
-        );
-
-    });
+    return true;
 
 }
-
 
 /**
  * Read metadata.json
@@ -152,24 +98,20 @@ function readMetadata(packageName) {
         );
 
         if (!fs.existsSync(metadataPath)) {
-
             return null;
-
         }
 
         return JSON.parse(
             fs.readFileSync(metadataPath, "utf8")
         );
 
-    }
-    catch (err) {
+    } catch (err) {
 
         return null;
 
     }
 
 }
-
 
 /**
  * Get music path
@@ -183,28 +125,18 @@ function getMusicPath(packageName) {
     );
 
     if (!fs.existsSync(musicPath)) {
-
         throw new Error("music.mp3 not found.");
-
     }
 
     return musicPath;
 
 }
 
-
 module.exports = {
-
     listPackages,
-
     getPackage,
-
     getNextPackage,
-
     markPackageUsed,
-
     readMetadata,
-
     getMusicPath
-
 };
